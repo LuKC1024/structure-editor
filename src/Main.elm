@@ -242,9 +242,9 @@ html_let h1 h2 h3 =
 html_fun : Html.Html msg -> Html.Html msg -> Html.Html msg
 html_fun h1 h2 =
     html_vertical []
-        [ span [] [ html_keyword "fun ", h1, html_delimit ":" ]
+        [ span [] [ html_keyword "fun ", h1, html_keyword ":"]
         , html_indent h2
-        , span [] [ html_keyword "end" ]
+        , span [] [ html_keyword "end." ]
         ]
 
 
@@ -262,19 +262,55 @@ html_match : Html.Html msg -> Html.Html msg -> Html.Html msg -> Html.Html msg ->
 html_match h1 h2 h3 h4 h5 =
     html_vertical []
         [ span [] [ html_keyword "match ", h1 ]
-        , span []
-            [ html_keyword "when "
-            , html_inl h2
-            , html_keyword " then"
-            ]
+        , span [] [ html_keyword "case ", html_inl h2, html_keyword ":"]
         , html_indent h3
-        , span []
-            [ html_keyword "when "
-            , html_inr h4
-            , html_keyword " then"
-            ]
+        , span [] [ html_keyword "case ", html_inr h4, html_keyword ":"]
         , html_indent h5
         , html_keyword "end."
+        ]
+
+
+make_suggest expected_s e s =
+    if String.startsWith s expected_s then
+        [ e ]
+
+    else
+        []
+
+
+suggest_fills : String -> List (Html.Html msg)
+suggest_fills s =
+    List.map
+        (\e ->
+            div
+                [ style "margin" "1px"
+                , style "background-color" "white"
+                ]
+                [ html_of_expr e ]
+        )
+        (List.concatMap (\f -> f s)
+            [ make_suggest "let" expr_let
+            , make_suggest "app" expr_app
+            , make_suggest "match" expr_match
+            ]
+        )
+
+
+html_focused_todo : String -> Html.Html msg
+html_focused_todo s =
+    div
+        [ style "display" "inline-block"
+        , style "position" "relative"
+        ]
+        [ html_todo s
+        , div
+            [ style "position" "absolute"
+            , style "top" "100%"
+            , style "display" "flex"
+            , style "flex-direction" "column"
+            , style "background-color" "lightgrey"
+            ]
+            (suggest_fills s)
         ]
 
 
@@ -284,18 +320,7 @@ html_todo s =
         html_hint "..."
 
     else
-        div
-            [ style "display" "inline-block"
-            , style "position" "relative"
-            ]
-            [ span [ style "background-color" "lightgrey" ] [ text "[", text s, text "]" ]
-            , div
-                [ style "position" "absolute"
-                , style "top" "100%"
-                , style "display" "flex"
-                ]
-                [ text "hello", text "world" ]
-            ]
+        span [ style "background-color" "lightgrey" ] [ text s ]
 
 
 html_of_expr : Expr -> Html.Html msg
@@ -303,6 +328,40 @@ html_of_expr e =
     case e of
         Todo s ->
             html_todo s
+
+        Num n ->
+            html_num n
+
+        Var s ->
+            html_var s
+
+        Bop o e1 e2 ->
+            html_bop o (html_of_expr e1) (html_of_expr e2)
+
+        App e1 e2 ->
+            html_app (html_of_expr e1) (html_of_expr e2)
+
+        Let x e1 e2 ->
+            html_let (html_var x) (html_of_expr e1) (html_of_expr e2)
+
+        Fun x e1 ->
+            html_fun (html_var x) (html_of_expr e1)
+
+        Inl e1 ->
+            html_inl (html_of_expr e1)
+
+        Inr e1 ->
+            html_inr (html_of_expr e1)
+
+        Match e1 xl el xr er ->
+            html_match (html_of_expr e1) (html_var xl) (html_of_expr el) (html_var xr) (html_of_expr er)
+
+
+html_of_focused_expr : Expr -> Html.Html msg
+html_of_focused_expr e =
+    case e of
+        Todo s ->
+            html_focused_todo s
 
         Num n ->
             html_num n
@@ -448,4 +507,4 @@ view m =
             embed_html_in_vctx (frame_html (html_var x)) ctx
 
         ExprModel x ctx ->
-            embed_html_in_ectx (frame_html (html_of_expr x)) ctx
+            embed_html_in_ectx (frame_html (html_of_focused_expr x)) ctx
