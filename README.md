@@ -27,3 +27,11 @@ Bi-directional type checking
 Unit, records, variants, functions.
 
 Take accessibility into account.
+
+## Logs 2021-01-26
+
+Auto-completion can improve discoverability considerably. I'd like to employ this mechanism to "teach" users syntaxes.
+
+I need a middle layer between AST and HTML. The middle layer may be translated to whitespace-indented string or a single line description if necessary.
+
+A parser is absolutely necessary.

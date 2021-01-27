@@ -21,6 +21,7 @@ type Expr
     | Match Expr String Expr String Expr
     | Inl Expr
     | Inr Expr
+    | Label String Expr
 
 
 expr_bop : Op2 -> Expr
@@ -45,7 +46,7 @@ expr_app =
 
 expr_match : Expr
 expr_match =
-    Match (Todo "") "x" (Todo "") "x" (Todo "")
+    Match (Todo "") "" (Todo "") "" (Todo "")
 
 
 expr_inl : Expr
@@ -56,6 +57,11 @@ expr_inl =
 expr_inr : Expr
 expr_inr =
     Inr (Todo "")
+
+
+expr_label : Expr
+expr_label =
+    Label "" (Todo "")
 
 
 type ExprContext
@@ -72,6 +78,7 @@ type ExprContext
     | Match1 () String Expr String Expr ExprContext
     | Match3 Expr String () String Expr ExprContext
     | Match5 Expr String Expr String () ExprContext
+    | Label2 String () ExprContext
 
 
 type VarContext
@@ -81,64 +88,75 @@ type VarContext
     | Match4 Expr String Expr () Expr ExprContext
 
 
+type LblContext
+    = Label1 () Expr ExprContext
+
+
 type Model
-    = ExprModel Expr ExprContext
-    | VarModel String VarContext
+    = MExp Expr ExprContext
+    | MVar String VarContext
+    | MLbl String LblContext
 
 
 nav_up : Model -> Maybe Model
 nav_up m =
     case m of
-        ExprModel _ EmptyContext ->
+        MExp _ EmptyContext ->
             Nothing
 
-        ExprModel e1 (Bop1 o () e2 ctx) ->
-            Just (ExprModel (Bop o e1 e2) ctx)
+        MExp e1 (Bop1 o () e2 ctx) ->
+            Just (MExp (Bop o e1 e2) ctx)
 
-        ExprModel e2 (Bop2 o e1 () ctx) ->
-            Just (ExprModel (Bop o e1 e2) ctx)
+        MExp e2 (Bop2 o e1 () ctx) ->
+            Just (MExp (Bop o e1 e2) ctx)
 
-        VarModel x (Let1 () e1 e2 ctx) ->
-            Just (ExprModel (Let x e1 e2) ctx)
+        MVar x (Let1 () e1 e2 ctx) ->
+            Just (MExp (Let x e1 e2) ctx)
 
-        ExprModel e1 (Let2 x () e2 ctx) ->
-            Just (ExprModel (Let x e1 e2) ctx)
+        MExp e1 (Let2 x () e2 ctx) ->
+            Just (MExp (Let x e1 e2) ctx)
 
-        ExprModel e2 (Let3 x e1 () ctx) ->
-            Just (ExprModel (Let x e1 e2) ctx)
+        MExp e2 (Let3 x e1 () ctx) ->
+            Just (MExp (Let x e1 e2) ctx)
 
-        VarModel x (Fun1 () e ctx) ->
-            Just (ExprModel (Fun x e) ctx)
+        MVar x (Fun1 () e ctx) ->
+            Just (MExp (Fun x e) ctx)
 
-        ExprModel e (Fun2 x () ctx) ->
-            Just (ExprModel (Fun x e) ctx)
+        MExp e (Fun2 x () ctx) ->
+            Just (MExp (Fun x e) ctx)
 
-        ExprModel e1 (App1 () e2 ctx) ->
-            Just (ExprModel (App e1 e2) ctx)
+        MExp e1 (App1 () e2 ctx) ->
+            Just (MExp (App e1 e2) ctx)
 
-        ExprModel e2 (App2 e1 () ctx) ->
-            Just (ExprModel (App e1 e2) ctx)
+        MExp e2 (App2 e1 () ctx) ->
+            Just (MExp (App e1 e2) ctx)
 
-        ExprModel e (Inl1 () ctx) ->
-            Just (ExprModel (Inl e) ctx)
+        MLbl x (Label1 () e ctx) ->
+            Just (MExp (Label x e) ctx)
 
-        ExprModel e (Inr1 () ctx) ->
-            Just (ExprModel (Inr e) ctx)
+        MExp e (Label2 x () ctx) ->
+            Just (MExp (Label x e) ctx)
 
-        ExprModel e (Match1 () xl el xr er ctx) ->
-            Just (ExprModel (Match e xl el xr er) ctx)
+        MExp e (Inl1 () ctx) ->
+            Just (MExp (Inl e) ctx)
 
-        VarModel xl (Match2 e () el xr er ctx) ->
-            Just (ExprModel (Match e xl el xr er) ctx)
+        MExp e (Inr1 () ctx) ->
+            Just (MExp (Inr e) ctx)
 
-        ExprModel el (Match3 e xl () xr er ctx) ->
-            Just (ExprModel (Match e xl el xr er) ctx)
+        MExp e (Match1 () xl el xr er ctx) ->
+            Just (MExp (Match e xl el xr er) ctx)
 
-        VarModel xr (Match4 e xl el () er ctx) ->
-            Just (ExprModel (Match e xl el xr er) ctx)
+        MVar xl (Match2 e () el xr er ctx) ->
+            Just (MExp (Match e xl el xr er) ctx)
 
-        ExprModel er (Match5 e xl el xr () ctx) ->
-            Just (ExprModel (Match e xl el xr er) ctx)
+        MExp el (Match3 e xl () xr er ctx) ->
+            Just (MExp (Match e xl el xr er) ctx)
+
+        MVar xr (Match4 e xl el () er ctx) ->
+            Just (MExp (Match e xl el xr er) ctx)
+
+        MExp er (Match5 e xl el xr () ctx) ->
+            Just (MExp (Match e xl el xr er) ctx)
 
 
 nav_right : Model -> Maybe Model
@@ -154,112 +172,126 @@ nav_left =
 nav_horizontal : Bool -> Model -> Maybe Model
 nav_horizontal right m =
     case m of
-        ExprModel _ EmptyContext ->
+        MExp _ EmptyContext ->
             Nothing
 
-        ExprModel e1 (Bop1 o () e2 ctx) ->
+        MExp e1 (Bop1 o () e2 ctx) ->
             if right then
-                Just (ExprModel e2 (Bop2 o e1 () ctx))
+                Just (MExp e2 (Bop2 o e1 () ctx))
 
             else
                 Nothing
 
-        ExprModel e2 (Bop2 o e1 () ctx) ->
+        MExp e2 (Bop2 o e1 () ctx) ->
             if right then
                 Nothing
 
             else
-                Just (ExprModel e1 (Bop1 o () e2 ctx))
+                Just (MExp e1 (Bop1 o () e2 ctx))
 
-        VarModel x (Let1 () e1 e2 ctx) ->
+        MVar x (Let1 () e1 e2 ctx) ->
             if right then
-                Just (ExprModel e1 (Let2 x () e2 ctx))
+                Just (MExp e1 (Let2 x () e2 ctx))
 
             else
                 Nothing
 
-        ExprModel e1 (Let2 x () e2 ctx) ->
+        MExp e1 (Let2 x () e2 ctx) ->
             if right then
-                Just (ExprModel e2 (Let3 x e1 () ctx))
+                Just (MExp e2 (Let3 x e1 () ctx))
 
             else
-                Just (VarModel x (Let1 () e1 e2 ctx))
+                Just (MVar x (Let1 () e1 e2 ctx))
 
-        ExprModel e2 (Let3 x e1 () ctx) ->
-            if right then
-                Nothing
-
-            else
-                Just (ExprModel e1 (Let2 x () e2 ctx))
-
-        VarModel x (Fun1 () e ctx) ->
-            if right then
-                Just (ExprModel e (Fun2 x () ctx))
-
-            else
-                Nothing
-
-        ExprModel e (Fun2 x () ctx) ->
+        MExp e2 (Let3 x e1 () ctx) ->
             if right then
                 Nothing
 
             else
-                Just (VarModel x (Fun1 () e ctx))
+                Just (MExp e1 (Let2 x () e2 ctx))
 
-        ExprModel e1 (App1 () e2 ctx) ->
+        MVar x (Fun1 () e ctx) ->
             if right then
-                Just (ExprModel e2 (App2 e1 () ctx))
+                Just (MExp e (Fun2 x () ctx))
 
             else
                 Nothing
 
-        ExprModel e2 (App2 e1 () ctx) ->
+        MExp e (Fun2 x () ctx) ->
             if right then
                 Nothing
 
             else
-                Just (ExprModel e1 (App1 () e2 ctx))
+                Just (MVar x (Fun1 () e ctx))
 
-        ExprModel _ (Inl1 () _) ->
+        MExp e1 (App1 () e2 ctx) ->
+            if right then
+                Just (MExp e2 (App2 e1 () ctx))
+
+            else
+                Nothing
+
+        MExp e2 (App2 e1 () ctx) ->
+            if right then
+                Nothing
+
+            else
+                Just (MExp e1 (App1 () e2 ctx))
+
+        MLbl x (Label1 () e ctx) ->
+            if right then
+                Just (MExp e (Label2 x () ctx))
+
+            else
+                Nothing
+
+        MExp e (Label2 x () ctx) ->
+            if right then
+                Nothing
+
+            else
+                Just (MLbl x (Label1 () e ctx))
+
+        MExp _ (Inl1 () _) ->
             Nothing
 
-        ExprModel _ (Inr1 () _) ->
+        MExp _ (Inr1 () _) ->
             Nothing
 
-        ExprModel e (Match1 () xl el xr er ctx) ->
+        MExp e (Match1 () xl el xr er ctx) ->
             if right then
-                Just (VarModel xl (Match2 e () el xr er ctx))
+                Just (MVar xl (Match2 e () el xr er ctx))
 
             else
                 Nothing
 
-        VarModel xl (Match2 e () el xr er ctx) ->
+        MVar xl (Match2 e () el xr er ctx) ->
             if right then
-                Just (ExprModel el (Match3 e xl () xr er ctx))
+                Just (MExp el (Match3 e xl () xr er ctx))
 
             else
-                Just (ExprModel e (Match1 () xl el xr er ctx))
+                Just (MExp e (Match1 () xl el xr er ctx))
 
-        ExprModel el (Match3 e xl () xr er ctx) ->
+        MExp el (Match3 e xl () xr er ctx) ->
             if right then
-                Just (VarModel xr (Match4 e xl el () er ctx))
+                Just (MVar xr (Match4 e xl el () er ctx))
 
             else
-                Just (VarModel xl (Match2 e () el xr er ctx))
+                Just (MVar xl (Match2 e () el xr er ctx))
 
-        VarModel xr (Match4 e xl el () er ctx) ->
+        MVar xr (Match4 e xl el () er ctx) ->
             if right then
-                Just (ExprModel er (Match5 e xl el xr () ctx))
+                Just (MExp er (Match5 e xl el xr () ctx))
 
             else
-                Just (ExprModel e (Match3 e xl () xr er ctx))
+                Just (MExp e (Match3 e xl () xr er ctx))
 
-        ExprModel er (Match5 e xl el xr () ctx) ->
+        MExp er (Match5 e xl el xr () ctx) ->
             if right then
                 Nothing
 
             else
-                Just (VarModel xr (Match4 e xl el () er ctx))
+                Just (MVar xr (Match4 e xl el () er ctx))
 
 
 nav_first_child : Model -> Maybe Model
@@ -275,58 +307,68 @@ nav_last_child =
 nav_child : Bool -> Model -> Maybe Model
 nav_child first m =
     case m of
-        VarModel _ _ ->
+        MVar _ _ ->
             Nothing
 
-        ExprModel (Todo _) _ ->
+        MLbl _ _ ->
             Nothing
 
-        ExprModel (Num _) _ ->
+        MExp (Todo _) _ ->
             Nothing
 
-        ExprModel (Var _) _ ->
+        MExp (Num _) _ ->
             Nothing
 
-        ExprModel (Bop o e1 e2) ctx ->
+        MExp (Var _) _ ->
+            Nothing
+
+        MExp (Bop o e1 e2) ctx ->
             if first then
-                Just (ExprModel e1 (Bop1 o () e2 ctx))
+                Just (MExp e1 (Bop1 o () e2 ctx))
 
             else
-                Just (ExprModel e2 (Bop2 o e1 () ctx))
+                Just (MExp e2 (Bop2 o e1 () ctx))
 
-        ExprModel (App e1 e2) ctx ->
+        MExp (App e1 e2) ctx ->
             if first then
-                Just (ExprModel e1 (App1 () e2 ctx))
+                Just (MExp e1 (App1 () e2 ctx))
 
             else
-                Just (ExprModel e2 (App2 e1 () ctx))
+                Just (MExp e2 (App2 e1 () ctx))
 
-        ExprModel (Let x e1 e2) ctx ->
+        MExp (Label x e) ctx ->
             if first then
-                Just (VarModel x (Let1 () e1 e2 ctx))
+                Just (MLbl x (Label1 () e ctx))
 
             else
-                Just (ExprModel e2 (Let3 x e1 () ctx))
+                Just (MExp e (Label2 x () ctx))
 
-        ExprModel (Fun x e) ctx ->
+        MExp (Let x e1 e2) ctx ->
             if first then
-                Just (VarModel x (Fun1 () e ctx))
+                Just (MVar x (Let1 () e1 e2 ctx))
 
             else
-                Just (ExprModel e (Fun2 x () ctx))
+                Just (MExp e2 (Let3 x e1 () ctx))
 
-        ExprModel (Inl e) ctx ->
-            Just (ExprModel e (Inl1 () ctx))
-
-        ExprModel (Inr e) ctx ->
-            Just (ExprModel e (Inl1 () ctx))
-
-        ExprModel (Match e xl el xr er) ctx ->
+        MExp (Fun x e) ctx ->
             if first then
-                Just (ExprModel e (Match1 () xl el xr er ctx))
+                Just (MVar x (Fun1 () e ctx))
 
             else
-                Just (ExprModel er (Match5 e xl el xr () ctx))
+                Just (MExp e (Fun2 x () ctx))
+
+        MExp (Inl e) ctx ->
+            Just (MExp e (Inl1 () ctx))
+
+        MExp (Inr e) ctx ->
+            Just (MExp e (Inl1 () ctx))
+
+        MExp (Match e xl el xr er) ctx ->
+            if first then
+                Just (MExp e (Match1 () xl el xr er ctx))
+
+            else
+                Just (MExp er (Match5 e xl el xr () ctx))
 
 
 right_up : Model -> Model

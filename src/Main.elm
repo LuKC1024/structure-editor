@@ -22,7 +22,7 @@ main =
 
 init : () -> ( Model, Cmd Msg )
 init () =
-    ( ExprModel (Todo "") EmptyContext, none )
+    ( MExp (Todo "") EmptyContext, none )
 
 
 type Direction
@@ -39,12 +39,38 @@ type Msg
     | Delete
     | Open
     | Close
+    | Space
     | Noop
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg mdl =
     ( update_model msg mdl, none )
+
+
+string_update : Msg -> String -> (String -> Model) -> Model
+string_update msg x make_model =
+    case msg of
+        Delete ->
+            make_model (String.slice 0 -1 x)
+
+        Open ->
+            make_model (String.append x "(")
+
+        Close ->
+            make_model (String.append x ")")
+
+        Space ->
+            make_model (String.append x " ")
+
+        InsertString s ->
+            make_model (String.append x s)
+
+        Submit ->
+            next_hole (make_model x)
+
+        _ ->
+            make_model x
 
 
 update_model : Msg -> Model -> Model
@@ -59,85 +85,85 @@ update_model msg mdl =
         ( Move Up, _ ) ->
             up_hole mdl
 
-        ( _, ExprModel (Todo s) ctx ) ->
+        ( _, MVar x ctx ) ->
+            string_update msg x (\new -> MVar new ctx)
+
+        ( _, MLbl x ctx ) ->
+            string_update msg x (\new -> MLbl new ctx)
+
+        ( Space, MExp e ctx ) ->
+            MExp (Todo "") (App2 e () ctx)
+
+        ( _, MExp (Todo s) ctx ) ->
             case msg of
                 Delete ->
-                    ExprModel (Todo (String.slice 0 -1 s)) ctx
+                    MExp (Todo (String.slice 0 -1 s)) ctx
 
                 InsertString s2 ->
-                    ExprModel (Todo (String.append s s2)) ctx
+                    MExp (Todo (String.append s s2)) ctx
 
                 Open ->
-                    ExprModel (Todo (String.append s "(")) ctx
+                    MExp (Todo (String.append s "(")) ctx
 
                 Close ->
-                    ExprModel (Todo (String.append s ")")) ctx
+                    MExp (Todo (String.append s ")")) ctx
 
                 Submit ->
                     case String.toInt s of
                         Just n ->
-                            ExprModel (Num n) ctx
+                            MExp (Num n) ctx
 
                         Nothing ->
                             if s == "+" then
-                                next_hole (ExprModel (Bop Add (Todo "") (Todo "")) ctx)
+                                next_hole (MExp (Bop Add (Todo "") (Todo "")) ctx)
 
                             else if s == "-" then
-                                next_hole (ExprModel (Bop Sub (Todo "") (Todo "")) ctx)
+                                next_hole (MExp (Bop Sub (Todo "") (Todo "")) ctx)
 
                             else if s == "*" then
-                                next_hole (ExprModel (Bop Mul (Todo "") (Todo "")) ctx)
+                                next_hole (MExp (Bop Mul (Todo "") (Todo "")) ctx)
 
                             else if s == "/" then
-                                next_hole (ExprModel (Bop Div (Todo "") (Todo "")) ctx)
+                                next_hole (MExp (Bop Div (Todo "") (Todo "")) ctx)
 
                             else if s == "==" then
-                                next_hole (ExprModel (Bop Eq (Todo "") (Todo "")) ctx)
+                                next_hole (MExp (Bop Eq (Todo "") (Todo "")) ctx)
 
                             else if s == "let" then
-                                next_hole (ExprModel (Let "" (Todo "") (Todo "")) ctx)
+                                next_hole (MExp (Let "" (Todo "") (Todo "")) ctx)
 
                             else if s == "fun" then
-                                next_hole (ExprModel (Fun "" (Todo "")) ctx)
+                                next_hole (MExp (Fun "" (Todo "")) ctx)
 
                             else if s == "#yes" then
-                                next_hole (ExprModel (Inl (Todo "")) ctx)
+                                next_hole (MExp expr_inl ctx)
 
                             else if s == "#no" then
-                                next_hole (ExprModel (Inr (Todo "")) ctx)
+                                next_hole (MExp expr_inr ctx)
 
                             else if s == "match" then
-                                next_hole (ExprModel (Match (Todo "") "_" (Todo "") "_" (Todo "")) ctx)
+                                next_hole (MExp expr_match ctx)
+
+                            else if s == "label" then
+                                next_hole (MExp expr_label ctx)
 
                             else if String.length s > 0 then
-                                ExprModel (Var s) ctx
+                                MExp (Var s) ctx
 
                             else
-                                mdl
+                                next_hole mdl
 
                 _ ->
                     mdl
 
-        ( Delete, VarModel x ctx ) ->
-            VarModel (String.slice 0 -1 x) ctx
-
-        ( Open, VarModel x ctx ) ->
-            VarModel (String.append x "(") ctx
-
-        ( Close, VarModel x ctx ) ->
-            VarModel (String.append x ")") ctx
-
-        ( InsertString s, VarModel x ctx ) ->
-            VarModel (String.append x s) ctx
-
-        ( Submit, VarModel _ _ ) ->
+        ( Submit, MExp _ _ ) ->
             next_hole mdl
 
-        ( Open, ExprModel e ctx ) ->
-            ExprModel (Todo "") (App2 e () ctx)
+        ( Delete, MExp _ ctx ) ->
+            MExp (Todo "") ctx
 
-        ( Delete, ExprModel _ ctx ) ->
-            ExprModel (Todo "") ctx
+        ( _, MExp (Var x) ctx ) ->
+            string_update msg x (\new -> MExp (Var new) ctx)
 
         _ ->
             mdl
@@ -154,7 +180,11 @@ html_var s =
         html_hint "?"
 
     else
-        span [ style "font-style" "italic" ] [ text s ]
+        span
+            [ style "font-style" "italic"
+            , style "white-space" "pre"
+            ]
+            [ text s ]
 
 
 html_keyword : String -> Html.Html msg
@@ -166,20 +196,20 @@ html_keyword s =
         [ text s ]
 
 
-html_label : String -> Html.Html msg
-html_label s =
-    span
-        [ style "white-space" "pre"
-        , style "color" "brown"
-        ]
-        [ text s ]
-
-
 html_delimit : String -> Html.Html msg
 html_delimit s =
     span
         [ style "white-space" "pre"
         , style "color" "grey"
+        ]
+        [ text s ]
+
+
+html_tag : String -> Html.Html msg
+html_tag s =
+    span
+        [ style "white-space" "pre"
+        , style "color" "brown"
         ]
         [ text s ]
 
@@ -242,7 +272,7 @@ html_let h1 h2 h3 =
 html_fun : Html.Html msg -> Html.Html msg -> Html.Html msg
 html_fun h1 h2 =
     html_vertical []
-        [ span [] [ html_keyword "fun ", h1, html_keyword ":"]
+        [ span [] [ html_keyword "fun ", h1, text ":" ]
         , html_indent h2
         , span [] [ html_keyword "end." ]
         ]
@@ -250,26 +280,32 @@ html_fun h1 h2 =
 
 html_inl : Html.Html msg -> Html.Html msg
 html_inl h =
-    span [] [ html_label "#yes ", h ]
+    span [] [ html_tag "#yes ", h ]
 
 
 html_inr : Html.Html msg -> Html.Html msg
 html_inr h =
-    span [] [ html_label "#no ", h ]
+    span [] [ html_tag "#no ", h ]
+
+
+html_label : Html.Html msg -> Html.Html msg -> Html.Html msg
+html_label h1 h2 =
+    span [] [ text "(", h1, text " = ", h2, text ")" ]
 
 
 html_match : Html.Html msg -> Html.Html msg -> Html.Html msg -> Html.Html msg -> Html.Html msg -> Html.Html msg
 html_match h1 h2 h3 h4 h5 =
     html_vertical []
         [ span [] [ html_keyword "match ", h1 ]
-        , span [] [ html_keyword "case ", html_inl h2, html_keyword ":"]
+        , span [] [ html_keyword "case ", html_inl h2, html_keyword ":" ]
         , html_indent h3
-        , span [] [ html_keyword "case ", html_inr h4, html_keyword ":"]
+        , span [] [ html_keyword "case ", html_inr h4, html_keyword ":" ]
         , html_indent h5
         , html_keyword "end."
         ]
 
 
+make_suggest : String -> a -> String -> List a
 make_suggest expected_s e s =
     if String.startsWith s expected_s then
         [ e ]
@@ -320,7 +356,11 @@ html_todo s =
         html_hint "..."
 
     else
-        span [ style "background-color" "lightgrey" ] [ text s ]
+        span
+            [ style "background-color" "lightgrey"
+            , style "white-space" "pre"
+            ]
+            [ text s ]
 
 
 html_of_expr : Expr -> Html.Html msg
@@ -347,6 +387,9 @@ html_of_expr e =
         Fun x e1 ->
             html_fun (html_var x) (html_of_expr e1)
 
+        Label s e1 ->
+            html_label (html_tag s) (html_of_expr e1)
+
         Inl e1 ->
             html_inl (html_of_expr e1)
 
@@ -363,32 +406,8 @@ html_of_focused_expr e =
         Todo s ->
             html_focused_todo s
 
-        Num n ->
-            html_num n
-
-        Var s ->
-            html_var s
-
-        Bop o e1 e2 ->
-            html_bop o (html_of_expr e1) (html_of_expr e2)
-
-        App e1 e2 ->
-            html_app (html_of_expr e1) (html_of_expr e2)
-
-        Let x e1 e2 ->
-            html_let (html_var x) (html_of_expr e1) (html_of_expr e2)
-
-        Fun x e1 ->
-            html_fun (html_var x) (html_of_expr e1)
-
-        Inl e1 ->
-            html_inl (html_of_expr e1)
-
-        Inr e1 ->
-            html_inr (html_of_expr e1)
-
-        Match e1 xl el xr er ->
-            html_match (html_of_expr e1) (html_var xl) (html_of_expr el) (html_var xr) (html_of_expr er)
+        _ ->
+            html_of_expr e
 
 
 frame_html : Html.Html msg -> Html.Html msg
@@ -410,6 +429,13 @@ embed_html_in_vctx h ctx =
 
         Match4 e1 xl el () er rest ->
             embed_html_in_ectx (html_match (html_of_expr e1) (html_var xl) (html_of_expr el) h (html_of_expr er)) rest
+
+
+embed_html_in_lctx : Html.Html msg -> LblContext -> Html.Html msg
+embed_html_in_lctx h ctx =
+    case ctx of
+        Label1 () e rest ->
+            embed_html_in_ectx (html_label h (html_of_expr e)) rest
 
 
 embed_html_in_ectx : Html.Html msg -> ExprContext -> Html.Html msg
@@ -445,6 +471,9 @@ embed_html_in_ectx h ctx =
         Inr1 () rest ->
             embed_html_in_ectx (html_inr h) rest
 
+        Label2 s () rest ->
+            embed_html_in_ectx (html_label (html_tag s) h) rest
+
         Match1 () xl el xr er rest ->
             embed_html_in_ectx (html_match h (html_var xl) (html_of_expr el) (html_var xr) (html_of_expr er)) rest
 
@@ -478,6 +507,9 @@ keyDownToMsg s =
         "Backspace" ->
             Delete
 
+        " " ->
+            Space
+
         "Enter" ->
             Submit
 
@@ -503,8 +535,11 @@ subscriptions _ =
 view : Model -> Html.Html Msg
 view m =
     case m of
-        VarModel x ctx ->
+        MVar x ctx ->
             embed_html_in_vctx (frame_html (html_var x)) ctx
 
-        ExprModel x ctx ->
+        MLbl x ctx ->
+            embed_html_in_lctx (frame_html (html_tag x)) ctx
+
+        MExp x ctx ->
             embed_html_in_ectx (frame_html (html_of_focused_expr x)) ctx
