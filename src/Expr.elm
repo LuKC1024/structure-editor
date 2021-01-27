@@ -429,3 +429,19 @@ up_hole m =
 
         Nothing ->
             m
+
+
+plugin : Model -> Expr
+plugin m =
+    case nav_up m of
+        Just parent_m ->
+            plugin parent_m
+
+        Nothing ->
+            case m of
+                MExp e EmptyContext ->
+                    e
+
+                _ ->
+                    -- impossible
+                    Num 42

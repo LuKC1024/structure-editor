@@ -2,12 +2,14 @@ module Main exposing (..)
 
 import Browser
 import Browser.Events exposing (onKeyDown)
+import Display exposing (show_of_expr)
 import Expr exposing (..)
-import Html exposing (div, span, text)
+import Html exposing (div, pre, span, text)
 import Html.Attributes exposing (style)
 import Json.Decode as Decode
 import Platform.Cmd exposing (none)
 import Platform.Sub exposing (batch)
+import Show exposing (..)
 
 
 main : Program () Model Msg
@@ -297,9 +299,9 @@ html_match : Html.Html msg -> Html.Html msg -> Html.Html msg -> Html.Html msg ->
 html_match h1 h2 h3 h4 h5 =
     html_vertical []
         [ span [] [ html_keyword "match ", h1 ]
-        , span [] [ html_keyword "case ", html_inl h2, html_keyword ":" ]
+        , span [] [ html_inl h2 ]
         , html_indent h3
-        , span [] [ html_keyword "case ", html_inr h4, html_keyword ":" ]
+        , span [] [ html_inr h4 ]
         , html_indent h5
         , html_keyword "end."
         ]
@@ -534,6 +536,34 @@ subscriptions _ =
 
 view : Model -> Html.Html Msg
 view m =
+    div
+        [ style "display" "flex"
+        , style "flex-direction" "row"
+        , style "height" "100vh"
+        ]
+        [ div
+            [ style "width" "50vw"
+            ]
+            [ view_model m ]
+        , div
+            [ style "white-space" "pre"
+            , style "font-family" "Courier New, Courier, monospace"
+            , style "width" "50vw"
+            , style "flex-grow" "0"
+            , style "flex-shrink" "0"
+            ]
+            [ text
+                (show
+                    (show_of_expr (plugin m))
+                )
+            ]
+
+        -- , view_model m
+        ]
+
+
+view_model : Model -> Html.Html Msg
+view_model m =
     case m of
         MVar x ctx ->
             embed_html_in_vctx (frame_html (html_var x)) ctx
