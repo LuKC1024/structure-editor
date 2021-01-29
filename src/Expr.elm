@@ -1,20 +1,20 @@
 module Expr exposing (..)
 
 
-type Op2
-    = Add
-    | Sub
-    | Mul
-    | Div
-    | Eq
-    | Pair
+-- type Op2
+--     = Add
+--     | Sub
+--     | Mul
+--     | Div
+--     | Eq
+--     | Pair
 
 
 type Expr
     = Todo String
     | Num Int
     | Var String
-    | Bop Op2 Expr Expr
+    -- | Bop Op2 Expr Expr
     | Let String Expr Expr
     | Fun String Expr
     | App Expr Expr
@@ -24,9 +24,9 @@ type Expr
     | Label String Expr
 
 
-expr_bop : Op2 -> Expr
-expr_bop o =
-    Bop o (Todo "") (Todo "")
+-- expr_bop : Op2 -> Expr
+-- expr_bop o =
+--     Bop o (Todo "") (Todo "")
 
 
 expr_let : Expr
@@ -68,8 +68,8 @@ type ExprContext
     = EmptyContext
     | Inl1 () ExprContext
     | Inr1 () ExprContext
-    | Bop1 Op2 () Expr ExprContext
-    | Bop2 Op2 Expr () ExprContext
+    -- | Bop1 Op2 () Expr ExprContext
+    -- | Bop2 Op2 Expr () ExprContext
     | Let2 String () Expr ExprContext
     | Let3 String Expr () ExprContext
     | Fun2 String () ExprContext
@@ -104,11 +104,11 @@ nav_up m =
         MExp _ EmptyContext ->
             Nothing
 
-        MExp e1 (Bop1 o () e2 ctx) ->
-            Just (MExp (Bop o e1 e2) ctx)
+        -- MExp e1 (Bop1 o () e2 ctx) ->
+        --     Just (MExp (Bop o e1 e2) ctx)
 
-        MExp e2 (Bop2 o e1 () ctx) ->
-            Just (MExp (Bop o e1 e2) ctx)
+        -- MExp e2 (Bop2 o e1 () ctx) ->
+        --     Just (MExp (Bop o e1 e2) ctx)
 
         MVar x (Let1 () e1 e2 ctx) ->
             Just (MExp (Let x e1 e2) ctx)
@@ -175,19 +175,19 @@ nav_horizontal right m =
         MExp _ EmptyContext ->
             Nothing
 
-        MExp e1 (Bop1 o () e2 ctx) ->
-            if right then
-                Just (MExp e2 (Bop2 o e1 () ctx))
+        -- MExp e1 (Bop1 o () e2 ctx) ->
+        --     if right then
+        --         Just (MExp e2 (Bop2 o e1 () ctx))
 
-            else
-                Nothing
+        --     else
+        --         Nothing
 
-        MExp e2 (Bop2 o e1 () ctx) ->
-            if right then
-                Nothing
+        -- MExp e2 (Bop2 o e1 () ctx) ->
+        --     if right then
+        --         Nothing
 
-            else
-                Just (MExp e1 (Bop1 o () e2 ctx))
+        --     else
+        --         Just (MExp e1 (Bop1 o () e2 ctx))
 
         MVar x (Let1 () e1 e2 ctx) ->
             if right then
@@ -322,12 +322,12 @@ nav_child first m =
         MExp (Var _) _ ->
             Nothing
 
-        MExp (Bop o e1 e2) ctx ->
-            if first then
-                Just (MExp e1 (Bop1 o () e2 ctx))
+        -- MExp (Bop o e1 e2) ctx ->
+        --     if first then
+        --         Just (MExp e1 (Bop1 o () e2 ctx))
 
-            else
-                Just (MExp e2 (Bop2 o e1 () ctx))
+        --     else
+        --         Just (MExp e2 (Bop2 o e1 () ctx))
 
         MExp (App e1 e2) ctx ->
             if first then

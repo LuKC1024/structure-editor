@@ -1,4 +1,4 @@
-module Display exposing (..)
+module TextDisplay exposing (..)
 
 import Expr exposing (..)
 import Show exposing (..)
@@ -38,26 +38,26 @@ show_var s =
         Text s
 
 
-show_bop : Op2 -> ShowExpr -> ShowExpr -> ShowExpr
-show_bop o h1 h2 =
-    case o of
-        Add ->
-            HBox [ show_delimit "(", h1, show_keyword " + ", h2, show_delimit ")" ]
+-- show_bop : Op2 -> ShowExpr -> ShowExpr -> ShowExpr
+-- show_bop o h1 h2 =
+--     case o of
+--         Add ->
+--             HBox [ show_delimit "(", h1, show_keyword " + ", h2, show_delimit ")" ]
 
-        Sub ->
-            HBox [ show_delimit "(", h1, show_keyword " - ", h2, show_delimit ")" ]
+--         Sub ->
+--             HBox [ show_delimit "(", h1, show_keyword " - ", h2, show_delimit ")" ]
 
-        Mul ->
-            HBox [ show_delimit "(", h1, show_keyword " * ", h2, show_delimit ")" ]
+--         Mul ->
+--             HBox [ show_delimit "(", h1, show_keyword " * ", h2, show_delimit ")" ]
 
-        Div ->
-            HBox [ show_delimit "(", h1, show_keyword " / ", h2, show_delimit ")" ]
+--         Div ->
+--             HBox [ show_delimit "(", h1, show_keyword " / ", h2, show_delimit ")" ]
 
-        Eq ->
-            HBox [ show_delimit "(", h1, show_keyword " == ", h2, show_delimit ")" ]
+--         Eq ->
+--             HBox [ show_delimit "(", h1, show_keyword " == ", h2, show_delimit ")" ]
 
-        Pair ->
-            HBox [ show_delimit "(", h1, show_keyword ", ", h2, show_delimit ")" ]
+--         Pair ->
+--             HBox [ show_delimit "(", h1, show_keyword ", ", h2, show_delimit ")" ]
 
 
 show_app : ShowExpr -> ShowExpr -> ShowExpr
@@ -140,8 +140,8 @@ show_of_expr e =
         Var s ->
             show_var s
 
-        Bop o e1 e2 ->
-            show_bop o (show_of_expr e1) (show_of_expr e2)
+        -- Bop o e1 e2 ->
+        --     show_bop o (show_of_expr e1) (show_of_expr e2)
 
         App e1 e2 ->
             show_app (show_of_expr e1) (show_of_expr e2)

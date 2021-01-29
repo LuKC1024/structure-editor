@@ -2,8 +2,9 @@ module Main exposing (..)
 
 import Browser
 import Browser.Events exposing (onKeyDown)
-import Display exposing (show_of_expr)
+import TextDisplay exposing (show_of_expr)
 import Expr exposing (..)
+import AutoCompletion exposing (..)
 import Html exposing (div, pre, span, text)
 import Html.Attributes exposing (style)
 import Json.Decode as Decode
@@ -93,9 +94,6 @@ update_model msg mdl =
         ( _, MLbl x ctx ) ->
             string_update msg x (\new -> MLbl new ctx)
 
-        ( Space, MExp e ctx ) ->
-            MExp (Todo "") (App2 e () ctx)
-
         ( _, MExp (Todo s) ctx ) ->
             case msg of
                 Delete ->
@@ -103,6 +101,9 @@ update_model msg mdl =
 
                 InsertString s2 ->
                     MExp (Todo (String.append s s2)) ctx
+
+                Space ->
+                    MExp (Todo (String.append s " ")) ctx
 
                 Open ->
                     MExp (Todo (String.append s "(")) ctx
@@ -116,22 +117,17 @@ update_model msg mdl =
                             MExp (Num n) ctx
 
                         Nothing ->
-                            if s == "+" then
-                                next_hole (MExp (Bop Add (Todo "") (Todo "")) ctx)
-
-                            else if s == "-" then
-                                next_hole (MExp (Bop Sub (Todo "") (Todo "")) ctx)
-
-                            else if s == "*" then
-                                next_hole (MExp (Bop Mul (Todo "") (Todo "")) ctx)
-
-                            else if s == "/" then
-                                next_hole (MExp (Bop Div (Todo "") (Todo "")) ctx)
-
-                            else if s == "==" then
-                                next_hole (MExp (Bop Eq (Todo "") (Todo "")) ctx)
-
-                            else if s == "let" then
+                            -- if s == "+" then
+                            --     next_hole (MExp (Bop Add (Todo "") (Todo "")) ctx)
+                            -- else if s == "-" then
+                            --     next_hole (MExp (Bop Sub (Todo "") (Todo "")) ctx)
+                            -- else if s == "*" then
+                            --     next_hole (MExp (Bop Mul (Todo "") (Todo "")) ctx)
+                            -- else if s == "/" then
+                            --     next_hole (MExp (Bop Div (Todo "") (Todo "")) ctx)
+                            -- else if s == "==" then
+                            --     next_hole (MExp (Bop Eq (Todo "") (Todo "")) ctx)
+                            if s == "let" then
                                 next_hole (MExp (Let "" (Todo "") (Todo "")) ctx)
 
                             else if s == "fun" then
@@ -157,6 +153,9 @@ update_model msg mdl =
 
                 _ ->
                     mdl
+
+        ( Space, MExp e ctx ) ->
+            MExp (Todo "") (App2 e () ctx)
 
         ( Submit, MExp _ _ ) ->
             next_hole mdl
@@ -209,11 +208,15 @@ html_delimit s =
 
 html_tag : String -> Html.Html msg
 html_tag s =
-    span
-        [ style "white-space" "pre"
-        , style "color" "brown"
-        ]
-        [ text s ]
+    if String.length s == 0 then
+        html_hint "?"
+
+    else
+        span
+            [ style "white-space" "pre"
+            , style "color" "brown"
+            ]
+            [ text s ]
 
 
 html_hint : String -> Html.Html msg
@@ -225,26 +228,22 @@ html_hint s =
         [ text s ]
 
 
-html_bop : Op2 -> Html.Html msg -> Html.Html msg -> Html.Html msg
-html_bop o h1 h2 =
-    case o of
-        Add ->
-            span [] [ html_delimit "(", h1, html_keyword " + ", h2, html_delimit ")" ]
 
-        Sub ->
-            span [] [ html_delimit "(", h1, html_keyword " - ", h2, html_delimit ")" ]
-
-        Mul ->
-            span [] [ html_delimit "(", h1, html_keyword " * ", h2, html_delimit ")" ]
-
-        Div ->
-            span [] [ html_delimit "(", h1, html_keyword " / ", h2, html_delimit ")" ]
-
-        Eq ->
-            span [] [ html_delimit "(", h1, html_keyword " == ", h2, html_delimit ")" ]
-
-        Pair ->
-            span [] [ html_delimit "(", h1, html_keyword ", ", h2, html_delimit ")" ]
+-- html_bop : Op2 -> Html.Html msg -> Html.Html msg -> Html.Html msg
+-- html_bop o h1 h2 =
+--     case o of
+--         Add ->
+--             span [] [ html_delimit "(", h1, html_keyword " + ", h2, html_delimit ")" ]
+--         Sub ->
+--             span [] [ html_delimit "(", h1, html_keyword " - ", h2, html_delimit ")" ]
+--         Mul ->
+--             span [] [ html_delimit "(", h1, html_keyword " * ", h2, html_delimit ")" ]
+--         Div ->
+--             span [] [ html_delimit "(", h1, html_keyword " / ", h2, html_delimit ")" ]
+--         Eq ->
+--             span [] [ html_delimit "(", h1, html_keyword " == ", h2, html_delimit ")" ]
+--         Pair ->
+--             span [] [ html_delimit "(", h1, html_keyword ", ", h2, html_delimit ")" ]
 
 
 html_app : Html.Html msg -> Html.Html msg -> Html.Html msg
@@ -292,7 +291,7 @@ html_inr h =
 
 html_label : Html.Html msg -> Html.Html msg -> Html.Html msg
 html_label h1 h2 =
-    span [] [ text "(", h1, text " = ", h2, text ")" ]
+    span [] [ html_delimit "(", h1, text " = ", h2, html_delimit ")" ]
 
 
 html_match : Html.Html msg -> Html.Html msg -> Html.Html msg -> Html.Html msg -> Html.Html msg -> Html.Html msg
@@ -307,13 +306,34 @@ html_match h1 h2 h3 h4 h5 =
         ]
 
 
-make_suggest : String -> a -> String -> List a
-make_suggest expected_s e s =
+make_prefix_filler : String -> Expr -> Filler
+make_prefix_filler expected_s e s =
     if String.startsWith s expected_s then
         [ e ]
 
     else
         []
+
+
+suggest_list : List (String -> List Expr)
+suggest_list =
+    List.map (\e -> make_prefix_filler (show (show_of_expr e)) e)
+        [ expr_let
+        , expr_fun
+        , expr_app
+        , expr_inl
+        , expr_inr
+        , expr_match
+        , expr_label
+        ]
+
+
+
+-- , expr_bop Add
+-- , expr_bop Sub
+-- , expr_bop Mul
+-- , expr_bop Div
+-- , expr_bop Eq
 
 
 suggest_fills : String -> List (Html.Html msg)
@@ -326,12 +346,7 @@ suggest_fills s =
                 ]
                 [ html_of_expr e ]
         )
-        (List.concatMap (\f -> f s)
-            [ make_suggest "let" expr_let
-            , make_suggest "app" expr_app
-            , make_suggest "match" expr_match
-            ]
-        )
+        (List.concatMap (\f -> f s) suggest_list)
 
 
 html_focused_todo : String -> Html.Html msg
@@ -354,15 +369,21 @@ html_focused_todo s =
 
 html_todo : String -> Html.Html msg
 html_todo s =
-    if String.length s == 0 then
-        html_hint "..."
+    span
+        [ style "white-space" "pre"
+        ]
+        [ text ("[" ++ s ++ "]") ]
 
-    else
-        span
-            [ style "background-color" "lightgrey"
-            , style "white-space" "pre"
-            ]
-            [ text s ]
+
+
+-- if String.length s == 0 then
+--     html_hint "..."
+-- else
+--     span
+--         [ style "background-color" "lightgrey"
+--         , style "white-space" "pre"
+--         ]
+--         [ text ("[" ++ s ++ "]") ]
 
 
 html_of_expr : Expr -> Html.Html msg
@@ -377,9 +398,8 @@ html_of_expr e =
         Var s ->
             html_var s
 
-        Bop o e1 e2 ->
-            html_bop o (html_of_expr e1) (html_of_expr e2)
-
+        -- Bop o e1 e2 ->
+        --     html_bop o (html_of_expr e1) (html_of_expr e2)
         App e1 e2 ->
             html_app (html_of_expr e1) (html_of_expr e2)
 
@@ -446,12 +466,10 @@ embed_html_in_ectx h ctx =
         EmptyContext ->
             h
 
-        Bop1 o () e rest ->
-            embed_html_in_ectx (html_bop o h (html_of_expr e)) rest
-
-        Bop2 o e () rest ->
-            embed_html_in_ectx (html_bop o (html_of_expr e) h) rest
-
+        -- Bop1 o () e rest ->
+        --     embed_html_in_ectx (html_bop o h (html_of_expr e)) rest
+        -- Bop2 o e () rest ->
+        --     embed_html_in_ectx (html_bop o (html_of_expr e) h) rest
         App1 () e rest ->
             embed_html_in_ectx (html_app h (html_of_expr e)) rest
 
