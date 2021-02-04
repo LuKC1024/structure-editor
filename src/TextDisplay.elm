@@ -21,7 +21,7 @@ show_delimit s =
 
 
 show_tag s =
-    Text s
+    Text ("#" ++ s)
 
 
 show_num : Int -> ShowExpr
@@ -38,24 +38,20 @@ show_var s =
         Text s
 
 
+
 -- show_bop : Op2 -> ShowExpr -> ShowExpr -> ShowExpr
 -- show_bop o h1 h2 =
 --     case o of
 --         Add ->
 --             HBox [ show_delimit "(", h1, show_keyword " + ", h2, show_delimit ")" ]
-
 --         Sub ->
 --             HBox [ show_delimit "(", h1, show_keyword " - ", h2, show_delimit ")" ]
-
 --         Mul ->
 --             HBox [ show_delimit "(", h1, show_keyword " * ", h2, show_delimit ")" ]
-
 --         Div ->
 --             HBox [ show_delimit "(", h1, show_keyword " / ", h2, show_delimit ")" ]
-
 --         Eq ->
 --             HBox [ show_delimit "(", h1, show_keyword " == ", h2, show_delimit ")" ]
-
 --         Pair ->
 --             HBox [ show_delimit "(", h1, show_keyword ", ", h2, show_delimit ")" ]
 
@@ -94,17 +90,17 @@ show_fun h1 h2 =
 
 show_inl : ShowExpr -> ShowExpr
 show_inl h =
-    HBox [ show_tag "#yes ", h ]
+    HBox [ show_tag "yes", Text " ", h ]
 
 
 show_inr : ShowExpr -> ShowExpr
 show_inr h =
-    HBox [ show_tag "#no ", h ]
+    HBox [ show_tag "no", Text " ", h ]
 
 
-show_label : ShowExpr -> ShowExpr -> ShowExpr
-show_label h1 h2 =
-    HBox [ Text "(", h1, Text " = ", h2, Text ")" ]
+show_inject : ShowExpr -> ShowExpr -> ShowExpr
+show_inject h1 h2 =
+    HBox [ h1, Text " ", h2 ]
 
 
 show_match : ShowExpr -> ShowExpr -> ShowExpr -> ShowExpr -> ShowExpr -> ShowExpr
@@ -119,13 +115,19 @@ show_match h1 h2 h3 h4 h5 =
         ]
 
 
+show_field : ShowExpr -> ShowExpr -> ShowExpr
+show_field lh eh =
+    HBox [ lh, Text " : ", eh ]
+
+
+show_record : List ShowExpr -> ShowExpr
+show_record hs =
+    HBox (Text "(" :: List.intersperse (Text ", ") hs ++ [ Text ")" ])
+
+
 show_todo : String -> ShowExpr
 show_todo s =
-    if String.length s == 0 then
-        show_hint "..."
-
-    else
-        HBox [ Text "[", Text s, Text "]" ]
+    HBox [ Text "[", Text s, Text "]" ]
 
 
 show_of_expr : Expr -> ShowExpr
@@ -142,7 +144,6 @@ show_of_expr e =
 
         -- Bop o e1 e2 ->
         --     show_bop o (show_of_expr e1) (show_of_expr e2)
-
         App e1 e2 ->
             show_app (show_of_expr e1) (show_of_expr e2)
 
@@ -152,14 +153,17 @@ show_of_expr e =
         Fun x e1 ->
             show_fun (show_var x) (show_of_expr e1)
 
-        Label s e1 ->
-            show_label (show_tag s) (show_of_expr e1)
-
-        Inl e1 ->
-            show_inl (show_of_expr e1)
-
-        Inr e1 ->
-            show_inr (show_of_expr e1)
+        Inject s e1 ->
+            show_inject (show_tag s) (show_of_expr e1)
 
         Match e1 xl el xr er ->
             show_match (show_of_expr e1) (show_var xl) (show_of_expr el) (show_var xr) (show_of_expr er)
+
+        Record fs ->
+            show_record
+                (List.map
+                    (\( fl, fe ) ->
+                        show_field (show_tag fl) (show_of_expr fe)
+                    )
+                    fs
+                )

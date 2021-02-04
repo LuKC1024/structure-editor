@@ -1,42 +1,26 @@
 module Expr exposing (..)
 
 
--- type Op2
---     = Add
---     | Sub
---     | Mul
---     | Div
---     | Eq
---     | Pair
-
-
 type Expr
     = Todo String
     | Num Int
     | Var String
-    -- | Bop Op2 Expr Expr
     | Let String Expr Expr
     | Fun String Expr
     | App Expr Expr
     | Match Expr String Expr String Expr
-    | Inl Expr
-    | Inr Expr
-    | Label String Expr
-
-
--- expr_bop : Op2 -> Expr
--- expr_bop o =
---     Bop o (Todo "") (Todo "")
+    | Inject String Expr
+    | Record (List ( String, Expr ))
 
 
 expr_let : Expr
 expr_let =
-    Let "x" (Todo "") (Todo "")
+    Let "" (Todo "") (Todo "")
 
 
 expr_fun : Expr
 expr_fun =
-    Fun "x" (Todo "")
+    Fun "" (Todo "")
 
 
 expr_app : Expr
@@ -49,27 +33,18 @@ expr_match =
     Match (Todo "") "" (Todo "") "" (Todo "")
 
 
-expr_inl : Expr
-expr_inl =
-    Inl (Todo "")
+expr_inject : Expr
+expr_inject =
+    Inject "" (Todo "")
 
 
-expr_inr : Expr
-expr_inr =
-    Inr (Todo "")
-
-
-expr_label : Expr
-expr_label =
-    Label "" (Todo "")
+expr_record : Expr
+expr_record =
+    Record []
 
 
 type ExprContext
     = EmptyContext
-    | Inl1 () ExprContext
-    | Inr1 () ExprContext
-    -- | Bop1 Op2 () Expr ExprContext
-    -- | Bop2 Op2 Expr () ExprContext
     | Let2 String () Expr ExprContext
     | Let3 String Expr () ExprContext
     | Fun2 String () ExprContext
@@ -78,7 +53,8 @@ type ExprContext
     | Match1 () String Expr String Expr ExprContext
     | Match3 Expr String () String Expr ExprContext
     | Match5 Expr String Expr String () ExprContext
-    | Label2 String () ExprContext
+    | Inject2 String () ExprContext
+    | Record2 (List ( String, Expr )) String () (List ( String, Expr )) ExprContext
 
 
 type VarContext
@@ -89,16 +65,17 @@ type VarContext
 
 
 type LblContext
-    = Label1 () Expr ExprContext
+    = Inject1 () Expr ExprContext
+    | Record1 (List ( String, Expr )) () Expr (List ( String, Expr )) ExprContext
 
 
-type Model
+type ExprFocus
     = MExp Expr ExprContext
     | MVar String VarContext
     | MLbl String LblContext
 
 
-nav_up : Model -> Maybe Model
+nav_up : ExprFocus -> Maybe ExprFocus
 nav_up m =
     case m of
         MExp _ EmptyContext ->
@@ -106,10 +83,8 @@ nav_up m =
 
         -- MExp e1 (Bop1 o () e2 ctx) ->
         --     Just (MExp (Bop o e1 e2) ctx)
-
         -- MExp e2 (Bop2 o e1 () ctx) ->
         --     Just (MExp (Bop o e1 e2) ctx)
-
         MVar x (Let1 () e1 e2 ctx) ->
             Just (MExp (Let x e1 e2) ctx)
 
@@ -131,17 +106,11 @@ nav_up m =
         MExp e2 (App2 e1 () ctx) ->
             Just (MExp (App e1 e2) ctx)
 
-        MLbl x (Label1 () e ctx) ->
-            Just (MExp (Label x e) ctx)
+        MLbl x (Inject1 () e ctx) ->
+            Just (MExp (Inject x e) ctx)
 
-        MExp e (Label2 x () ctx) ->
-            Just (MExp (Label x e) ctx)
-
-        MExp e (Inl1 () ctx) ->
-            Just (MExp (Inl e) ctx)
-
-        MExp e (Inr1 () ctx) ->
-            Just (MExp (Inr e) ctx)
+        MExp e (Inject2 x () ctx) ->
+            Just (MExp (Inject x e) ctx)
 
         MExp e (Match1 () xl el xr er ctx) ->
             Just (MExp (Match e xl el xr er) ctx)
@@ -158,18 +127,24 @@ nav_up m =
         MExp er (Match5 e xl el xr () ctx) ->
             Just (MExp (Match e xl el xr er) ctx)
 
+        MLbl l (Record1 fs1 () e fs2 ctx) ->
+            Just (MExp (Record (List.reverse fs1 ++ (( l, e ) :: fs2))) ctx)
 
-nav_right : Model -> Maybe Model
+        MExp e (Record2 fs1 l () fs2 ctx) ->
+            Just (MExp (Record (List.reverse fs1 ++ (( l, e ) :: fs2))) ctx)
+
+
+nav_right : ExprFocus -> Maybe ExprFocus
 nav_right =
     nav_horizontal True
 
 
-nav_left : Model -> Maybe Model
+nav_left : ExprFocus -> Maybe ExprFocus
 nav_left =
     nav_horizontal False
 
 
-nav_horizontal : Bool -> Model -> Maybe Model
+nav_horizontal : Bool -> ExprFocus -> Maybe ExprFocus
 nav_horizontal right m =
     case m of
         MExp _ EmptyContext ->
@@ -178,17 +153,13 @@ nav_horizontal right m =
         -- MExp e1 (Bop1 o () e2 ctx) ->
         --     if right then
         --         Just (MExp e2 (Bop2 o e1 () ctx))
-
         --     else
         --         Nothing
-
         -- MExp e2 (Bop2 o e1 () ctx) ->
         --     if right then
         --         Nothing
-
         --     else
         --         Just (MExp e1 (Bop1 o () e2 ctx))
-
         MVar x (Let1 () e1 e2 ctx) ->
             if right then
                 Just (MExp e1 (Let2 x () e2 ctx))
@@ -238,25 +209,19 @@ nav_horizontal right m =
             else
                 Just (MExp e1 (App1 () e2 ctx))
 
-        MLbl x (Label1 () e ctx) ->
+        MLbl x (Inject1 () e ctx) ->
             if right then
-                Just (MExp e (Label2 x () ctx))
+                Just (MExp e (Inject2 x () ctx))
 
             else
                 Nothing
 
-        MExp e (Label2 x () ctx) ->
+        MExp e (Inject2 x () ctx) ->
             if right then
                 Nothing
 
             else
-                Just (MLbl x (Label1 () e ctx))
-
-        MExp _ (Inl1 () _) ->
-            Nothing
-
-        MExp _ (Inr1 () _) ->
-            Nothing
+                Just (MLbl x (Inject1 () e ctx))
 
         MExp e (Match1 () xl el xr er ctx) ->
             if right then
@@ -293,18 +258,42 @@ nav_horizontal right m =
             else
                 Just (MVar xr (Match4 e xl el () er ctx))
 
+        MLbl l (Record1 fs1 () e fs2 ctx) ->
+            if right then
+                Just (MExp e (Record2 fs1 l () fs2 ctx))
 
-nav_first_child : Model -> Maybe Model
+            else
+                case fs1 of
+                    [] ->
+                        Nothing
+
+                    ( next_l, next_e ) :: next_fs1 ->
+                        Just (MExp next_e (Record2 next_fs1 next_l () (( l, e ) :: fs2) ctx))
+
+        MExp e (Record2 fs1 l () fs2 ctx) ->
+            if right then
+                case fs2 of
+                    [] ->
+                        Nothing
+
+                    ( next_l, next_e ) :: next_fs2 ->
+                        Just (MLbl next_l (Record1 (( l, e ) :: fs1) () next_e next_fs2 ctx))
+
+            else
+                Just (MExp (Record (List.reverse fs1 ++ (( l, e ) :: fs2))) ctx)
+
+
+nav_first_child : ExprFocus -> Maybe ExprFocus
 nav_first_child =
     nav_child True
 
 
-nav_last_child : Model -> Maybe Model
+nav_last_child : ExprFocus -> Maybe ExprFocus
 nav_last_child =
     nav_child False
 
 
-nav_child : Bool -> Model -> Maybe Model
+nav_child : Bool -> ExprFocus -> Maybe ExprFocus
 nav_child first m =
     case m of
         MVar _ _ ->
@@ -325,10 +314,8 @@ nav_child first m =
         -- MExp (Bop o e1 e2) ctx ->
         --     if first then
         --         Just (MExp e1 (Bop1 o () e2 ctx))
-
         --     else
         --         Just (MExp e2 (Bop2 o e1 () ctx))
-
         MExp (App e1 e2) ctx ->
             if first then
                 Just (MExp e1 (App1 () e2 ctx))
@@ -336,12 +323,12 @@ nav_child first m =
             else
                 Just (MExp e2 (App2 e1 () ctx))
 
-        MExp (Label x e) ctx ->
+        MExp (Inject x e) ctx ->
             if first then
-                Just (MLbl x (Label1 () e ctx))
+                Just (MLbl x (Inject1 () e ctx))
 
             else
-                Just (MExp e (Label2 x () ctx))
+                Just (MExp e (Inject2 x () ctx))
 
         MExp (Let x e1 e2) ctx ->
             if first then
@@ -357,12 +344,6 @@ nav_child first m =
             else
                 Just (MExp e (Fun2 x () ctx))
 
-        MExp (Inl e) ctx ->
-            Just (MExp e (Inl1 () ctx))
-
-        MExp (Inr e) ctx ->
-            Just (MExp e (Inl1 () ctx))
-
         MExp (Match e xl el xr er) ctx ->
             if first then
                 Just (MExp e (Match1 () xl el xr er ctx))
@@ -370,8 +351,25 @@ nav_child first m =
             else
                 Just (MExp er (Match5 e xl el xr () ctx))
 
+        MExp (Record fs) ctx ->
+            if first then
+                case fs of
+                    [] ->
+                        Nothing
 
-right_up : Model -> Model
+                    ( l, e ) :: rest_fs ->
+                        Just (MLbl l (Record1 [] () e rest_fs ctx))
+
+            else
+                case List.reverse fs of
+                    [] ->
+                        Nothing
+
+                    ( l, e ) :: rest_fs ->
+                        Just (MExp e (Record2 rest_fs l () [] ctx))
+
+
+right_up : ExprFocus -> ExprFocus
 right_up m =
     case nav_right m of
         Just sibling_m ->
@@ -386,7 +384,7 @@ right_up m =
                     m
 
 
-next_hole : Model -> Model
+next_hole : ExprFocus -> ExprFocus
 next_hole m =
     case nav_first_child m of
         Just child_m ->
@@ -396,7 +394,7 @@ next_hole m =
             right_up m
 
 
-down_right : Model -> Model
+down_right : ExprFocus -> ExprFocus
 down_right m =
     case nav_last_child m of
         Just child_m ->
@@ -406,7 +404,7 @@ down_right m =
             m
 
 
-prev_hole : Model -> Model
+prev_hole : ExprFocus -> ExprFocus
 prev_hole m =
     case nav_left m of
         Just sibling_m ->
@@ -421,7 +419,7 @@ prev_hole m =
                     down_right m
 
 
-up_hole : Model -> Model
+up_hole : ExprFocus -> ExprFocus
 up_hole m =
     case nav_up m of
         Just parent_m ->
@@ -431,7 +429,7 @@ up_hole m =
             m
 
 
-plugin : Model -> Expr
+plugin : ExprFocus -> Expr
 plugin m =
     case nav_up m of
         Just parent_m ->
